@@ -1,0 +1,30 @@
+import math
+import os
+import sys
+
+$UPDATE_OS_ENVIRON = True
+
+$PROMPT_FIELDS['time_format'] = '%Y-%m-%d %H:%M:%S'
+$PROMPT = '{YELLOW}{env_name}{BOLD_BLUE}{user}@{hostname} {BOLD_GREEN}{cwd} {RESET}[{localtime}] {gitstatus}{RESET}\n> '
+
+$EDITOR = "nvim"
+
+$TITLE = '{short_cwd}:{current_job}'
+
+$CARGO_NET_GIT_FETCH_WITH_CLI = "true"
+
+xontrib load vox
+
+source-zsh ~/.zshrc
+
+$path_extensions = [
+  f"{$HOME}/.local/bin",
+  f"{$HOME}/.asdf/shims",
+  "/opt/homebrew/bin",
+  "/opt/homebrew/sbin",
+  ]
+
+for $loc in $path_extensions:
+  if os.path.isdir($loc):
+    $PATH.append($loc)
+
