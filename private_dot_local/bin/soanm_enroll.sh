@@ -1,5 +1,8 @@
 #!/bin/sh
 
+workdir=$(mktemp -d)
+cd $workdir
+
 # Install nix
 curl -L https://nixos.org/nix/install | sh
 
@@ -22,7 +25,8 @@ nix-env -iA \
   nixpkgs.bitwarden-cli \
   nixpkgs.asdf-vm \
   nixpkgs.awscli \
-  nixpkgs.gh
+  nixpkgs.gh \
+  nixpkgs.vimPlugins.vim-plug
 
 # Nice-to-haves:
 nix-env -iA \
@@ -80,16 +84,33 @@ bw receive $1 > credentials.json
 
 xonsh << EOF
 import json
+import os
 
 creds = json.load("credentials.json")
-with open(f'{os.path.expanduser("~")}/.ssh/id_ed25519', 'w') as f:
+
+home = os.path.expanduser("~")
+
+with open(f'{home}/.ssh/id_ed25519', 'w') as f:
   f.write(creds["id_ed25519"])
-with open(f'{os.path.expanduser("~")}/.ssh/id_ed25519.pub', 'w') as f:
+with open(f'{home}/.ssh/id_ed25519.pub', 'w') as f:
   f.write(creds["id_ed25519.pub"])
 
-aws configure set access_key @(creds["access_key_id"])
-aws configure set secret_key @(creds["secret_access_key"])
-aws configure set region us-east-1
+os.makedirs(f"{home}/.aws", exist_ok=True)
+credentials_file = (
+f"""[default]
+aws_access_key_id = {creds["access_key_id"]}
+aws_secret_access_key = {creds["secret_access_key"]}
+""")
+with open(f'{home}/.aws/credentials', 'w') as f:
+  f.write(credentials_file)
+
+config_file = (
+"""[default]
+region = us-east-1
+""")
+
+with open(f'{home}/.aws/config', 'w') as f:
+  f.write(config_file)
 EOF
 
 chezmoi init --apply benwr
