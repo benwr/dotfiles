@@ -1,0 +1,52 @@
+#!/usr/bin/env xonsh
+
+# set -e
+$RAISE_SUBPROC_ERROR = True
+
+import getpass
+import json
+
+from datetime import datetime, timedelta
+
+machine_name = input("Hostname of new machine: ").strip()
+ssh_passphrase = getpass.getpass("SSH key password for new machine: ").strip()
+
+workdir = $(mktemp -d).strip()
+ssh-keygen -N @(ssh_passphrase) -t ed25519 -f f"{workdir}/id_ed25519"
+
+echo "LOG IN TO GITHUB:"
+gh auth login -h github.com
+gh auth refresh -h github.com -s admin:public_key
+gh ssh-key add f"{workdir}/id_ed25519.pub"
+
+$AWS_DEFAULT_OUTPUT = "json"
+aws iam create-user --user-name @(machine_name)
+aws iam attach-user-policy --user-name @(machine_name) --policy-arn "arn:aws:iam::aws:policy/job-function/SystemAdministrator"
+$iam_user_access_key = json.loads($(aws iam create-access-key --user-name @(machine_name)))
+
+echo "LOG IN TO BITWARDEN:"
+try:
+  bw login
+except:
+  echo "already logged in"
+
+echo "USING BITWARDEN SEND TO SHARE CREDENTIALS"
+secrets_object = {
+  "id_ed25519": open(f"{workdir}/id_ed25519").read(),
+  "id_ed25519.pub": open(f"{workdir}/id_ed25519.pub").read(),
+  "access_key_id": $iam_user_access_key["AccessKey"]["AccessKeyId"],
+  "secret_access_key": $iam_user_access_key["AccessKey"]["SecretAccessKey"],
+}
+
+send_obj=json.loads($(bw send template send.text))
+send_obj["text"]["text"] = json.dumps(secrets_object)
+send_obj["name"] = f"{machine_name} secrets"
+send_obj["maxAccessCount"] = 3
+send_obj["deletionDate"] = (datetime.utcnow() + timedelta(days=1)).isoformat() + "Z"
+
+encoded_send = $(echo @(json.dumps(send_obj)) | bw encode)
+send_link = json.loads($(bw send create encoded_send))
+echo "Okay, now run:"
+echo f"echo {send_link['accessUrl']} | sh -c 'curl -L https://raw.githubusercontent.com/benwr/dotfiles/main/soanm.sh | sh'"
+echo "and when prompted paste the following:"
+echo @(send_link["accessUrl"])
