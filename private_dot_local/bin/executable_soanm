@@ -45,8 +45,7 @@ send_obj["maxAccessCount"] = 3
 send_obj["deletionDate"] = (datetime.utcnow() + timedelta(days=1)).isoformat() + "Z"
 
 encoded_send = $(echo @(json.dumps(send_obj)) | bw encode)
-send_link = json.loads($(bw send create encoded_send))
-echo "Okay, now run:"
-echo f"echo {send_link['accessUrl']} | sh -c 'curl -L https://raw.githubusercontent.com/benwr/dotfiles/main/soanm.sh | sh'"
-echo "and when prompted paste the following:"
-echo @(send_link["accessUrl"])
+send_link = json.loads($(bw send create @(encoded_send)))
+echo "Okay, now run the following on the new host:"
+echo
+echo f"curl -L https://raw.githubusercontent.com/benwr/dotfiles/main/soanm.sh | sh {send_link['accessUrl']}"
