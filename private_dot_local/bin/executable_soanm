@@ -1,6 +1,5 @@
 #!/usr/bin/env xonsh
 
-# set -e
 $RAISE_SUBPROC_ERROR = True
 
 import getpass
@@ -20,8 +19,8 @@ gh auth refresh -h github.com -s admin:public_key
 gh ssh-key add f"{workdir}/id_ed25519.pub"
 
 $AWS_DEFAULT_OUTPUT = "json"
-aws iam create-user --user-name @(machine_name)
-aws iam attach-user-policy --user-name @(machine_name) --policy-arn "arn:aws:iam::aws:policy/job-function/SystemAdministrator"
+aws iam create-user --user-name @(machine_name) > /dev/null
+aws iam attach-user-policy --user-name @(machine_name) --policy-arn "arn:aws:iam::aws:policy/job-function/SystemAdministrator" > /dev/null
 $iam_user_access_key = json.loads($(aws iam create-access-key --user-name @(machine_name)))
 
 echo "LOG IN TO BITWARDEN:"
@@ -30,22 +29,19 @@ try:
 except:
   echo "already logged in"
 
-echo "USING BITWARDEN SEND TO SHARE CREDENTIALS"
+echo "USE BITWARDEN SEND TO SHARE CREDENTIALS"
+
+# For some reason, if these keys are more descriptive we get an error from bitwarden.
+# Maybe we overflow the maximum length of a text Send?
 secrets_object = {
-  "id_ed25519": open(f"{workdir}/id_ed25519").read(),
-  "id_ed25519.pub": open(f"{workdir}/id_ed25519.pub").read(),
-  "access_key_id": $iam_user_access_key["AccessKey"]["AccessKeyId"],
-  "secret_access_key": $iam_user_access_key["AccessKey"]["SecretAccessKey"],
+  "i": open(f"{workdir}/id_ed25519").read(),
+  "ip": open(f"{workdir}/id_ed25519.pub").read(),
+  "ak": $iam_user_access_key["AccessKey"]["AccessKeyId"],
+  "sk": $iam_user_access_key["AccessKey"]["SecretAccessKey"],
 }
 
-send_obj=json.loads($(bw send template send.text))
-send_obj["text"]["text"] = json.dumps(secrets_object)
-send_obj["name"] = f"{machine_name} secrets"
-send_obj["maxAccessCount"] = 3
-send_obj["deletionDate"] = (datetime.utcnow() + timedelta(days=1)).isoformat() + "Z"
+send_link = json.loads($(bw send -n f"{machine_name} secrets" -d 1 @(json.dumps(secrets_object))))
 
-encoded_send = $(echo @(json.dumps(send_obj)) | bw encode)
-send_link = json.loads($(bw send create @(encoded_send)))
 echo "Okay, now run the following on the new host:"
 echo
-echo f"curl -L https://raw.githubusercontent.com/benwr/dotfiles/main/soanm.sh | sh {send_link['accessUrl']}"
+echo f"curl -L https://raw.githubusercontent.com/benwr/soanm/main/soanm_enroll.sh | sh -s {send_link['accessUrl']}"
